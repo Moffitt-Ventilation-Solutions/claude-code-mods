@@ -1,0 +1,26 @@
+{
+  "name": "moffitt-mods",
+  "owner": {
+    "name": "Moffitt Ventilation Solutions"
+  },
+  "metadata": {
+    "description": "Claude Code mods approved for Moffitt. Copied unchanged from Anthropic's claude-code-playground samples (Apache-2.0)."
+  },
+  "plugins": [
+    {
+      "name": "blast-radius",
+      "source": "./plugins/blast-radius",
+      "description": "Holds risky shell commands and shows what they would change, with Proceed and Cancel buttons."
+    },
+    {
+      "name": "replay-theater",
+      "source": "./plugins/replay-theater",
+      "description": "Step through the file edits Claude made in the last turn, one diff at a time."
+    },
+    {
+      "name": "token-weather",
+      "source": "./plugins/token-weather",
+      "description": "A live forecast of the context window, drawn above the prompt."
+    }
+  ]
+}
