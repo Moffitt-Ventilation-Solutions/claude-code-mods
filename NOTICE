@@ -1,10 +1,16 @@
 The three mods under plugins/ (blast-radius, replay-theater, token-weather) are copied
-unchanged from Anthropic's claude-code-playground repository:
+from Anthropic's claude-code-playground repository:
 
   https://github.com/anthropics/claude-code-playground
   path:   claude-code/mods
   commit: 569c5283d9a0a7ee7938df85bb32e4f48cbb8c86 (2026-10-01)
 
 Copyright Anthropic, PBC. Licensed under the Apache License, Version 2.0 (see LICENSE).
-Moffitt Ventilation Solutions' only change: the folders sit under plugins/ and are listed
-in .claude-plugin/marketplace.json under the marketplace name "moffitt-mods".
+Moffitt Ventilation Solutions' changes:
+- The folders sit under plugins/ and are listed in .claude-plugin/marketplace.json under
+  the marketplace name "moffitt-mods".
+- blast-radius (version 0.1.1, 2026-10-29) is modified to work on Windows: bash and sleep
+  are found through Git for Windows when they are not on PATH, folders come back as
+  Windows paths, and a session nobody is attached to is refused at once instead of held.
+  The change is marked at the top of plugins/blast-radius/hooks/blast-radius.mjs.
+replay-theater and token-weather are unchanged.

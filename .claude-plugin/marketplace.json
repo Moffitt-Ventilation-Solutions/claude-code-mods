@@ -4,7 +4,7 @@
     "name": "Moffitt Ventilation Solutions"
   },
   "metadata": {
-    "description": "Claude Code mods approved for Moffitt. Copied unchanged from Anthropic's claude-code-playground samples (Apache-2.0)."
+    "description": "Claude Code mods approved for Moffitt. Copied from Anthropic's claude-code-playground samples (Apache-2.0); blast-radius is changed to work on Windows (see NOTICE)."
   },
   "plugins": [
     {

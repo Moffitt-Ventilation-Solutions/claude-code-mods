@@ -14,6 +14,11 @@
 //
 // The host reads `on(...)` and `$.noun.method(...)` from source, so they are
 // spelled literally, and helpers that take `$` are top-level functions.
+//
+// Modified by Moffitt Ventilation Solutions (2026-10-29) for Windows: bash and
+// sleep are found through Git for Windows when they are not on PATH, folders
+// come back as Windows paths, and a session nobody is attached to (a -p run) is
+// refused at once instead of held for ten minutes. See "Windows" below.
 
 const PANE_ID = "blast-radius";
 const POLL_SECONDS = "0.25";
@@ -36,9 +41,9 @@ export function register(on) {
       if (next.signal.aborted) {
         return { deny: "Blast Radius held this command and did not run it: the turn was interrupted. Do not retry it unless the user asks you to." };
       }
-      await $.process.run(["sleep", POLL_SECONDS], { timeoutMs: 5000 });
+      await pause($);
     }
-    const mine = { command: String(e.command), risk, report: null, decision: null, where: "pane" };
+    const mine ={ command: String(e.command), risk, report: null, decision: null, where: "pane" };
     held = mine;
 
     let opened = { isPlaced: false };
@@ -54,11 +59,16 @@ export function register(on) {
         : await measure($, risk, cwd);
       summary = mine.report.summary;
 
-      opened = await $.ui.open({ id: PANE_ID, title: "Blast Radius", focus: true, rows: paneRows(mine.report) });
-      if (!opened.isPlaced) {
-        mine.where = "band";
+      // Nobody can press a button in a session no surface is attached to.
+      if ((await $.session.surfaces()).length === 0) {
+        mine.decision = "unattended";
+      } else {
+        opened = await $.ui.open({ id: PANE_ID, title: "Blast Radius", focus: true, rows: paneRows(mine.report) });
+        if (!opened.isPlaced) {
+          mine.where = "band";
+        }
+        $.ui.invalidate("ui.render");
       }
-      $.ui.invalidate("ui.render");
 
       const startedAt = await $.clock.now();
       while (mine.decision === null) {
@@ -70,7 +80,7 @@ export function register(on) {
           mine.decision = "timeout";
           break;
         }
-        await $.process.run(["sleep", POLL_SECONDS], { timeoutMs: 5000 });
+        await pause($);
       }
     } catch {
       mine.decision = "error"; // anything unexpected refuses the command
@@ -99,7 +109,8 @@ export function register(on) {
       cancel: "the user pressed Cancel",
       timeout: "no answer within 10 minutes",
       interrupted: "the turn was interrupted",
-      error: "Blast Radius hit an error while holding it",
+      unattended: "nobody is attached to this session to press Proceed",
+      error:"Blast Radius hit an error while holding it",
     }[decision] ?? "no answer was recorded";
     return {
       deny: `Blast Radius held this command and did not run it: ${why}. It would have: ${summary}. Do not retry it unless the user asks you to.`,
@@ -130,7 +141,7 @@ const READ_ONLY = new Set(["ls", "cat", "echo", "printf", "grep", "rg", "find", 
 
 /** A folder a later `cd arg` moves to, given the folder so far (null = the session folder). */
 function joinDir(dir, arg) {
-  if (arg === undefined || arg === "~" || arg.startsWith("/") || arg.startsWith("~/")) {
+  if (arg === undefined || arg === "~" || arg.startsWith("/") || arg.startsWith("~/") || /^[A-Za-z]:[\\/]/.test(arg)) {
     return arg ?? "~";
   }
   return dir ? `${dir}/${arg}` : arg;
@@ -269,13 +280,15 @@ function classifySegment(segment, dir, pushed) {
 
 // Resolves a `cd` target to an absolute folder, or null if it doesn't exist.
 // The target is passed as an argument, never as source.
-const CD_SCRIPT = `unset CDPATH; d="$1"; case "$d" in "~") d="$HOME";; "~/"*) d="$HOME/\${d#\\~/}";; esac; cd -- "$d" 2>/dev/null && pwd -P`;
+// `pwd -W` (Git for Windows' bash only) prints C:/..., a folder a Windows child can start in.
+const CD_SCRIPT = `unset CDPATH; d="$1"; case "$d" in "~") d="$HOME";; "~/"*) d="$HOME/\${d#\\~/}";; esac; cd -- "$d" 2>/dev/null && { pwd -W 2>/dev/null || pwd -P; }`;
 
 async function resolveDir($, sessionCwd, dir) {
   if (dir === "-") {
     return null; // `cd -` depends on the shell's history
   }
-  const run = await $.process.run(["bash", "-c", CD_SCRIPT, "blast-radius", dir], { cwd: sessionCwd, timeoutMs: 5000 });
+  const { bash } = await hostTools($);
+  const run = await $.process.run([bash, "-c", CD_SCRIPT, "blast-radius", dir], { cwd: sessionCwd, timeoutMs: 5000 });
   const out = run.stdout.trim();
   return run.exitCode === 0 && out !== "" ? out : null;
 }
@@ -323,7 +336,7 @@ for p in "$@"; do
 done
 if (( \${#paths[@]} == 0 )); then echo "0 0 0"; exit 0; fi
 # A relative path gets ./ in front, so find never reads a name like -delete as an action.
-for i in "\${!paths[@]}"; do case "\${paths[$i]}" in /*) ;; *) paths[$i]="./\${paths[$i]}";; esac; done
+for i in "\${!paths[@]}"; do case "\${paths[$i]}" in /*|[A-Za-z]:*) ;; *) paths[$i]="./\${paths[$i]}";; esac; done
 files=$(find "\${paths[@]}" \\( -type f -o -type l \\) 2>/dev/null | wc -l | tr -d ' ')
 kb=$(du -skc "\${paths[@]}" 2>/dev/null | tail -n1 | cut -f1)
 echo "$files $(( \${kb:-0} * 1024 )) \${#paths[@]}"
@@ -334,7 +347,8 @@ async function measureRm($, risk, cwd) {
   if (risk.targets.length === 0) {
     return { summary: "rm with no paths", lines: [], note: "No paths to expand." };
   }
-  const run = await $.process.run(["bash", "-c", RM_SCRIPT, "blast-radius", ...risk.targets], { cwd, timeoutMs: 15000 });
+  const { bash } = await hostTools($);
+  const run = await $.process.run([bash, "-c", RM_SCRIPT, "blast-radius", ...risk.targets], { cwd, timeoutMs: 15000 });
   const [head, ...rest] = run.stdout.split("\n").filter((l) => l !== "");
   const [files, bytes, found] = (head ?? "0 0 0").split(" ").map(Number);
   if (!found) {
@@ -467,6 +481,44 @@ async function measureMigrations($, risk, cwd) {
     more: Math.max(0, pending.length - LIST_MAX),
     note: `From ${lister.argv.join(" ")}.`,
   };
+}
+
+// ---- Windows --------------------------------------------------------------
+
+// bash and sleep are not on the Windows PATH, so `$.process.run` can't start
+// them by name. Git for Windows ships both: its root is three folders above
+// `git --exec-path` (<root>/<mingw64|ucrt64|...>/libexec/git-core), and its
+// bin/bash.exe puts usr/bin first on PATH, so the scripts' find and du are GNU.
+let tools = null;
+
+/** { bash, sleep } to run: the names on PATH, or Git for Windows' own. Found once. */
+function hostTools($) {
+  if (tools === null) {
+    tools = findTools($).catch((error) => {
+      tools = null; // look again next time
+      throw error;
+    });
+  }
+  return tools;
+}
+
+async function findTools($) {
+  try {
+    await $.process.run(["sleep", "0"], { timeoutMs: 5000 });
+    return { bash: "bash", sleep: "sleep" };
+  } catch {
+    const run = await $.process.run(["git", "--exec-path"], { timeoutMs: 5000 });
+    const root = run.stdout.trim().replace(/[\\/][^\\/]+[\\/]libexec[\\/]git-core$/, "");
+    const found = { bash: `${root}/bin/bash.exe`, sleep: `${root}/usr/bin/sleep.exe` };
+    await $.process.run([found.sleep, "0"], { timeoutMs: 5000 }); // rejects where Git's layout differs
+    return found;
+  }
+}
+
+/** One poll's wait. Time inside a `$` call is free; `$.clock.sleep` spends the hook's budget. */
+async function pause($) {
+  const { sleep } = await hostTools($);
+  await $.process.run([sleep, POLL_SECONDS], { timeoutMs: 5000 });
 }
 
 function size(bytes) {

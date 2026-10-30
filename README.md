@@ -1,9 +1,10 @@
 # Moffitt Claude Code mods
 
 The Claude Code mods approved for Moffitt, as a plugin marketplace named `moffitt-mods`.
-Each folder under `plugins/` is a complete plugin, copied unchanged from Anthropic's
+Each folder under `plugins/` is a complete plugin, copied from Anthropic's
 [claude-code-playground](https://github.com/anthropics/claude-code-playground/tree/main/claude-code/mods)
-samples. See `NOTICE` for the source commit.
+samples. `blast-radius` is changed to work on Windows; the other two are unchanged. See
+`NOTICE` for the source commit and the change.
 
 | Mod | What it does |
 | --- | --- |
@@ -13,6 +14,10 @@ samples. See `NOTICE` for the source commit.
 
 Mods need Claude Code 2.1.287 or later (the Desktop app's Code tab: 2.1.286 or later).
 They work in the terminal, the Desktop app's Code tab and VS Code, not in chat or Cowork.
+
+`blast-radius` shows its buttons only in a terminal session. In the Desktop app's Code tab
+nothing can draw them, so it refuses the risky command at once and says what it would
+have changed; run that command yourself if you still want it.
 
 ## MoffittCorp Team members
 
@@ -28,6 +33,7 @@ Run these in a terminal, then start a new Claude Code session (or run `/reload-p
 claude plugin marketplace add Moffitt-Ventilation-Solutions/claude-code-mods
 claude plugin install token-weather@moffitt-mods
 claude plugin install replay-theater@moffitt-mods
+claude plugin install blast-radius@moffitt-mods
 ```
 
 To check, run `claude plugin list`: each mod shows `Status: enabled`.
